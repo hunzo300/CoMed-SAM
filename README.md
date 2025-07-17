@@ -116,6 +116,5 @@ python /CoMed-SAM/script/unit_test/unit_test.py
 
 This script loads the trained CoMed-SAM model and runs it on selected test samples.
 
-```
 
 
