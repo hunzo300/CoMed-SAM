@@ -13,7 +13,7 @@ CoMed-SAM is a collaborative extension of Segment Anything Model (SAM) for multi
 ## 🖼️ Framework
 
 <p align="center">
-  <img src="assets/model_architecture.png" width="800">
+  <img src="assets/model_architecture.jpg" width="800">
 </p>
 
 ## 📁 Dataset Preparation
