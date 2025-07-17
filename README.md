@@ -1,6 +1,6 @@
 # CoMed-SAM: Collaborative Medical SAM for Multi-Modality Image Segmentation
 
-> Official PyTorch implementation of **CoMed-SAM** (Kim et al., under revew)<br>
+> Official PyTorch implementation of **CoMed-SAM** (Kim et al., under review)<br>
 
 ## 🧠 Overview
 
