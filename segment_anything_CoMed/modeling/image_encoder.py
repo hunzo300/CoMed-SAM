@@ -230,7 +230,7 @@ class Block(nn.Module):
 
         if self.adapter:
             x_norm = self.norm2(x)
-            x = x + self.mlp(x_norm) + self.Adapter(x_norm)
+            x = x + self.mlp(x_norm) + self.Adapter(shortcut)
         else:
             x = x + self.mlp(self.norm2(x))
 
