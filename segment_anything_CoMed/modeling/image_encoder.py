@@ -125,7 +125,7 @@ class ImageEncoderViT(nn.Module):
                 rel_pos_zero_init=rel_pos_zero_init,
                 window_size=window_size if i not in global_attn_indexes else 0,
                 input_size=(img_size // patch_size, img_size // patch_size),
-                adapter = LoRA_train,
+                LoRA = LoRA_train,
             )
             self.blocks.append(block)
 
@@ -176,7 +176,7 @@ class Block(nn.Module):
         rel_pos_zero_init: bool = True,
         window_size: int = 0,
         input_size: Optional[Tuple[int, int]] = None,
-        adapter: bool = False
+        LoRA: bool = False
     ) -> None:
         """
         Args:
@@ -195,7 +195,7 @@ class Block(nn.Module):
         """
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.adapter = LoRA_Layer
+        self.LoRA = LoRA_Layer
         self.attn = Attention(
             dim,
             num_heads=num_heads,
@@ -209,8 +209,8 @@ class Block(nn.Module):
         self.mlp = MLPBlock(embedding_dim=dim, mlp_dim=int(dim * mlp_ratio), act=act_layer)
 
         self.window_size = window_size
-        if self.adapter:
-            self.Adapter = LoRA_Layer(dim)
+        if self.LoRA:
+            self.LoRA = LoRA_Layer(dim)
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -228,9 +228,9 @@ class Block(nn.Module):
 
         x = shortcut + x
 
-        if self.adapter:
+        if self.LoRA:
             x_norm = self.norm2(x)
-            x = x + self.mlp(x_norm) + self.Adapter(shortcut)
+            x = x + self.mlp(x_norm) + self.LoRA(shortcut)
         else:
             x = x + self.mlp(self.norm2(x))
 

@@ -110,6 +110,8 @@ class CoMedSAM(nn.Module):
 
         for p in self.prompt_encoder.parameters():
             p.requires_grad = False
+        for p in self.mask_decoder.parameters():
+            p.requires_grad = False
 
     def forward(self, images, box):
         B, n, C, H, W = images.shape
@@ -147,13 +149,13 @@ parser.add_argument(
 "-i",
 "--tr_npy_path",
 type=str,
-default="/mnt/sda/minkyukim/CoMed-sam_dataset/IVDM/ivdm_npy_train_dataset_1024image",
+default="/CoMed-sam_dataset/IVDM/ivdm_npy_train_dataset_1024image",
 help="path to training npy files; two subfolders: gts and imgs",
 )
 parser.add_argument(
 "--val_npy_path",
 type=str,
-default="/mnt/sda/minkyukim/CoMed-sam_dataset/IVDM/ivdm_npy_val_dataset_1024image",
+default="/CoMed-sam_dataset/IVDM/ivdm_npy_val_dataset_1024image",
 help="path to training npy files; two subfolders: gts and imgs",
 )
 parser.add_argument(
@@ -179,9 +181,30 @@ def main():
         indicator=[1, 1, 1, 1],
     ).to(device)
 
-    optimizer = torch.optim.AdamW(
-        filter(lambda p: p.requires_grad, model.parameters()), lr=1e-4, weight_decay=1e-2
+    img_enc_params = []
+    for encoder in model.image_encoders:
+        for name, param in encoder.named_parameters():
+            if "lora" in name.lower():  
+                param.requires_grad = True
+                img_enc_params.append(param)
+            else:
+                param.requires_grad = False
+
+    conv_params = (
+        list(model.conv1.parameters())
+        + list(model.conv2.parameters())
+        + list(model.conv3.parameters())
     )
+
+    optimizer = torch.optim.AdamW(
+        img_enc_params + conv_params, lr=1e-4, weight_decay=1e-2
+    )
+
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total Params: {total_params}, Trainable: {trainable_params}")
+
+
     loss_fn_dice = monai.losses.DiceLoss(sigmoid=True)
     loss_fn_ce = nn.BCEWithLogitsLoss()
 
