@@ -205,10 +205,10 @@ CoMed-sam_dataset/
 
 We provide pretrained CoMed-SAM weights for both IVDM and CHAOS datasets.
 
-| Model                | Task                         | Download                                                                     |
-| -------------------- | ---------------------------- | ---------------------------------------------------------------------------- |
-| CoMed-SAM (IVDM3Seg) | Lumbar disc segmentation     | [🔗 Download Weights](https://drive.google.com/file/d/XXXX/view?usp=sharing) |
-| CoMed-SAM (CHAOS)    | Abdominal organ segmentation | [🔗 Download Weights](https://drive.google.com/file/d/YYYY/view?usp=sharing) |
+| Model                | Task                         | Download                                                                                                     |
+| -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| CoMed-SAM (IVDM3Seg) | Lumbar disc segmentation     | [🔗 Download Weights](https://drive.google.com/file/d/1Ul81NDRHCkwAVzJwW22-d5NKjBrt6NSL/view?usp=drive_link) |
+| CoMed-SAM (CHAOS)    | Abdominal organ segmentation | [🔗 Download Weights](https://drive.google.com/file/d/1GvHZPmtTi9-8D7Bm0ghVtD-PVPqMnk2U/view?usp=drive_link) |
 
 
 ---
