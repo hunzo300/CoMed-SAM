@@ -31,7 +31,7 @@ def inference_on_npy(data_root, npy_file=None, bbox_shift=0):
         indicator=[1,1,1,1]
     ).to(device)
 
-    checkpoint = torch.load("pth/CoMed_20.pth", weights_only=True)
+    checkpoint = torch.load("/pth/IVDM3Seg/CoMed_SAM_IVDM3Seg.pth", weights_only=True)
     model.load_state_dict(checkpoint, strict=False)
     model.eval()
 

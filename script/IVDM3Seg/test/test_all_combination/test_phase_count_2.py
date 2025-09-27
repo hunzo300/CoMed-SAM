@@ -89,7 +89,7 @@ def test(checkpoint_path, indicator):
     print(f"Results for checkpoint, mask {indicator} saved to CSV.")
 
 if __name__ == "__main__":
-    checkpoint_path = f"/pth/CoMed_SAM.pth"
+    checkpoint_path = f"/pth/IVDM3Seg/CoMed_SAM_IVDM3Seg.pth"
     print(f"Testing with checkpoint: {checkpoint_path}")
     for indicator in indicators:
         test(checkpoint_path, indicator)
