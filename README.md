@@ -119,12 +119,9 @@ This script loads the trained CoMed-SAM model and runs it on selected test sampl
 
 
 
-````markdown
 # CoMed-SAM: Collaborative Medical SAM for Multi-Modality Image Segmentation
 
 > Official PyTorch implementation of **CoMed-SAM** (Kim et al., under review)<br>
-
----
 
 ## 🧠 Overview
 
