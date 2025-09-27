@@ -95,18 +95,77 @@ class NpyDataset(Dataset):
         )
 
 
-class CoMedSAM(nn.Module):
-    def __init__(self, image_encoder_factory, mask_decoder, prompt_encoder, indicator):
+def get_2d_sincos_pos_embed(h, w, dim, device):
+
+    assert dim % 4 == 0, "pos embed dim must be divisible by 4"
+    dim_quarter = dim // 4
+
+    yy, xx = torch.meshgrid(
+        torch.arange(h, device=device),
+        torch.arange(w, device=device),
+        indexing="ij",
+    )
+    yy = yy.flatten().float()   # [hw]
+    xx = xx.flatten().float()   # [hw]
+
+    omega = torch.arange(dim_quarter, device=device).float() / dim_quarter
+    omega = 1.0 / (10000 ** omega)  # [dim/4]
+
+    out_y = torch.einsum("n,d->nd", yy, omega)  # [hw, dim/4]
+    out_x = torch.einsum("n,d->nd", xx, omega)  # [hw, dim/4]
+
+    pos_y = torch.cat([torch.sin(out_y), torch.cos(out_y)], dim=1)  # [hw, dim/2]
+    pos_x = torch.cat([torch.sin(out_x), torch.cos(out_x)], dim=1)  # [hw, dim/2]
+    pos = torch.cat([pos_y, pos_x], dim=1)  # [hw, dim]
+    return pos.unsqueeze(0)  # [1, hw, dim]
+
+
+class TransformerBlock(nn.Module):
+    def __init__(self, d_model=256, nhead=8, mlp_ratio=4.0, attn_dropout=0.0, proj_dropout=0.0):
         super().__init__()
-        self.image_encoders = nn.ModuleList([image_encoder_factory() for _ in range(4)])
+        self.norm1 = nn.LayerNorm(d_model)
+        self.attn = nn.MultiheadAttention(d_model, nhead, dropout=attn_dropout, batch_first=True)
+        self.drop1 = nn.Dropout(proj_dropout)
+
+        self.norm2 = nn.LayerNorm(d_model)
+        hidden = int(d_model * mlp_ratio)
+        self.mlp = nn.Sequential(
+            nn.Linear(d_model, hidden),
+            nn.GELU(),
+            nn.Linear(hidden, d_model),
+        )
+        self.drop2 = nn.Dropout(proj_dropout)
+
+    def forward(self, x):
+        # x: [B, HW, C]
+        x = x + self.drop1(self.attn(self.norm1(x), self.norm1(x), self.norm1(x))[0])
+        x = x + self.drop2(self.mlp(self.norm2(x)))
+        return x
+
+class CoMedSAM(nn.Module):
+
+    def __init__(self, image_encoder_factory, mask_decoder, prompt_encoder, indicator,
+                 d_model=256, nhead=8, mlp_ratio=4.0, proj_dropout=0.0):
+        super().__init__()
+        self.image_encoder_factory = image_encoder_factory
         self.mask_decoder = mask_decoder
         self.prompt_encoder = prompt_encoder
         self.indicator = indicator
+        self.d_model = d_model
+
+        self.image_encoders = nn.ModuleList([self.image_encoder_factory() for _ in range(4)])
 
         self.conv1 = nn.Conv2d(256 * 4, 512, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
-        self.gelu = nn.GELU()
+        self.act = nn.GELU()
+
+        self.tr_proj_in = nn.Conv2d(256 * 4, d_model, kernel_size=1)
+        self.tr_block1 = TransformerBlock(d_model=d_model, nhead=nhead, mlp_ratio=mlp_ratio, proj_dropout=proj_dropout)
+        self.tr_block2 = TransformerBlock(d_model=d_model, nhead=nhead, mlp_ratio=mlp_ratio, proj_dropout=proj_dropout)
+        self.tr_block3 = TransformerBlock(d_model=d_model, nhead=nhead, mlp_ratio=mlp_ratio, proj_dropout=proj_dropout)
+
+        self.out_norm = nn.GroupNorm(8, d_model)
 
         for p in self.prompt_encoder.parameters():
             p.requires_grad = False
@@ -115,33 +174,57 @@ class CoMedSAM(nn.Module):
 
     def forward(self, images, box):
         B, n, C, H, W = images.shape
-        image_embeddings = []
 
-        for idx, encoder in enumerate(self.image_encoders):
-            x = images[:, idx]
-            if self.indicator[idx]:
-                image_embeddings.append(encoder(x))
+        splits = torch.split(images, 1, dim=1)
+        embs = []
+        for idx, enc in enumerate(self.image_encoders):
+            x = splits[idx].squeeze(1)  # [B,C,H,W]
+            if self.indicator[idx] == 1:
+                e = enc(x)
             else:
                 with torch.no_grad():
-                    image_embeddings.append(torch.zeros_like(encoder(x)))
+                    e = enc(x)
+                e = torch.zeros_like(e)
+            embs.append(e)
 
-        concat = torch.cat(image_embeddings, dim=1)
-        x = self.gelu(self.conv1(concat))
-        x = self.gelu(self.conv2(x))
-        x = self.conv3(x)
+        concat = torch.cat(embs, dim=1)  # [B,1024,H',W']
+        Bh, Bw = concat.shape[-2], concat.shape[-1]
+
+
+        conv_out = self.act(self.conv1(concat))
+        conv_out = self.act(self.conv2(conv_out))
+        conv_out = self.act(self.conv3(conv_out))  # [B,256,H',W']
+
+
+        tr = self.tr_proj_in(concat)              # [B,256,H',W']
+        tr_flat = tr.flatten(2).transpose(1, 2)   # [B,HW,256]
+        pos = get_2d_sincos_pos_embed(Bh, Bw, self.d_model, device=tr.device)
+        tr_flat = tr_flat + pos
+
+        tr_flat = self.tr_block1(tr_flat)
+        tr_flat = self.tr_block2(tr_flat)
+        tr_flat = self.tr_block3(tr_flat)
+        tr_out = tr_flat.transpose(1, 2).reshape(B, self.d_model, Bh, Bw)
+
+        fused = conv_out + tr_out
+        fused = self.out_norm(fused)
 
         with torch.no_grad():
-            box_torch = torch.as_tensor(box, dtype=torch.float32, device=images.device)[:, None, :]
-            sparse_embeddings, dense_embeddings = self.prompt_encoder(points=None, boxes=box_torch, masks=None)
+            box_torch = torch.as_tensor(box, dtype=torch.float32, device=images.device)
+            if len(box_torch.shape) == 2:
+                box_torch = box_torch[:, None, :]  # (B,1,4)
+            sparse_emb, dense_emb = self.prompt_encoder(points=None, boxes=box_torch, masks=None)
 
-        masks, _ = self.mask_decoder(
-            image_embeddings=x,
+        low_res_masks, _ = self.mask_decoder(
+            image_embeddings=fused,
             image_pe=self.prompt_encoder.get_dense_pe(),
-            sparse_prompt_embeddings=sparse_embeddings,
-            dense_prompt_embeddings=dense_embeddings,
+            sparse_prompt_embeddings=sparse_emb,
+            dense_prompt_embeddings=dense_emb,
             multimask_output=False,
         )
-        return F.interpolate(masks, size=(H, W), mode="bilinear", align_corners=False)
+
+        ori_res_masks = F.interpolate(low_res_masks, size=(H, W), mode="bilinear", align_corners=False)
+        return ori_res_masks
 
 
 parser = argparse.ArgumentParser()
@@ -184,7 +267,7 @@ def main():
     img_enc_params = []
     for encoder in model.image_encoders:
         for name, param in encoder.named_parameters():
-            if "lora" in name.lower():  
+            if "adapter" in name.lower():  
                 param.requires_grad = True
                 img_enc_params.append(param)
             else:

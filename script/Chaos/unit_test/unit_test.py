@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from segment_anything_CoMed import sam_model_registry
-from script.train.train import NpyDataset, CoMedSAM, join
+from script.Chaos.train.train import NpyDataset, CoMedSAM, join
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -28,7 +28,7 @@ def inference_on_npy(data_root, npy_file=None, bbox_shift=0):
         image_encoder_factory=create_image_encoder,
         mask_decoder=sam_model.mask_decoder.to(device),  
         prompt_encoder=sam_model.prompt_encoder.to(device), 
-        indicator=[1,1,1,1]
+        indicator=[1,1,1]
     ).to(device)
 
     checkpoint = torch.load("pth/CoMed_20.pth", weights_only=True)
@@ -68,6 +68,6 @@ def inference_on_npy(data_root, npy_file=None, bbox_shift=0):
         print(f"Saved: {save_path}")
 
 if __name__ == "__main__":
-    data_root = "/CoMed-sam_dataset/IVDM/ivdm_npy_test_dataset_1024image"
-    npy_file = "14-14_3.npy"
+    data_root = "/CoMed-sam_dataset/Chaos/Chaos_npy_test_dataset_1024image"
+    npy_file = "sample_name"
     inference_on_npy(data_root, npy_file=npy_file)

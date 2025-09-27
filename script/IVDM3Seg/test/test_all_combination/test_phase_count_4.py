@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from segment_anything_CoMed import sam_model_registry
-from script.train.train import CoMedSAM, NpyDataset
+from script.IVDM3Seg.train.train import CoMedSAM, NpyDataset
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 batch_size = 1
@@ -32,7 +32,7 @@ def calculate_metrics(pred_mask, gt_mask):
     dice = (2 * intersection + epsilon) / (torch.sum(pred_flat) + torch.sum(gt_flat) + epsilon)
     return iou.item(), dice.item()
 
-def test(checkpoint_path, number, indicator):
+def test(checkpoint_path, indicator):
     dataset = NpyDataset(dataset_path)
     test_dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
     sam_model = sam_model_registry["vit_b"](checkpoint="SAM_PT/sam_vit_b_01ec64.pth")
@@ -53,7 +53,7 @@ def test(checkpoint_path, number, indicator):
 
     results = []
 
-    for step, (images, gt, bboxes, img_names) in enumerate(tqdm(test_dataloader, desc=f"Testing checkpoint {number}, mask {indicator}")):
+    for step, (images, gt, bboxes, img_names) in enumerate(tqdm(test_dataloader, desc=f"Testing checkpoint, mask {indicator}")):
         images = images.to(device)
         gt = gt.to(device)
         with torch.no_grad():
@@ -68,7 +68,6 @@ def test(checkpoint_path, number, indicator):
     std_dice = np.std([r['dice'] for r in results])
 
     output_data = {
-        "checkpoint_number": number,
         "indicator": str(indicator),
         "average_iou": avg_iou,
         "std_iou": std_iou,
@@ -85,8 +84,7 @@ def test(checkpoint_path, number, indicator):
     print(f"Results for checkpoint {number}, mask {indicator} saved to CSV.")
 
 if __name__ == "__main__":
-    for number in range(20, 21):
-        checkpoint_path = f"/pth/CoMed_{number}.pth"
-        print(f"Testing with checkpoint: {checkpoint_path}")
-        for indicator in indicators:
-            test(checkpoint_path, number, indicator)
+    checkpoint_path = f"/pth/CoMed_SAM.pth"
+    print(f"Testing with checkpoint: {checkpoint_path}")
+    for indicator in indicators:
+        test(checkpoint_path, indicator)
