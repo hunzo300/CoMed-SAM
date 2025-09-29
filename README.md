@@ -249,7 +249,7 @@ This script uses `--tr_npy_path` and `--val_npy_path` and saves checkpoints to `
 Evaluate segmentation performance across all modality combinations (1–4):
 
 ```bash
-bash /CoMed-SAM/script/test/test.sh
+bash /CoMed-SAM/script/{dataset}/test/test.sh
 ```
 
 This executes multiple test scripts such as:
